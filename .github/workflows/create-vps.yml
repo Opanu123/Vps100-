@@ -2,25 +2,23 @@ name: auto-vps
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # every 6 hours
+    - cron: '0 */6 * * *'  # Every 6 hours
   workflow_dispatch:
 
 jobs:
   setup-vps:
     runs-on: ubuntu-latest
     env:
-      MEGA_USERNAME: ${{ secrets.MEGA_USERNAME }}
+      MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
       MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip snapd
-          sudo snap install megacmd || echo "Snap install failed, trying apt..."
-          sudo apt-get install -y megacmd || echo "apt-get install megacmd failed"
+          sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip
+          pip3 install mega.py
 
       - name: Start tmate session
         run: |
@@ -37,13 +35,9 @@ jobs:
           echo "eula=true" > eula.txt
           echo -e "motd=GitHub VPS Minecraft Server\nmax-players=10\nonline-mode=false" > server.properties
 
-      - name: MEGA login and download plugins
+      - name: Download plugins from MEGA
         run: |
-          mega-logout || true
-          mega-login "$MEGA_USERNAME" "$MEGA_PASSWORD"
-          mkdir -p minecraft/plugins
-          mega-ls / || true
-          mega-get /plugins minecraft/plugins || echo "No plugins folder found in MEGA"
+          python3 mega_helper.py download_plugins plugins minecraft/plugins || echo "No plugins found or error"
 
       - name: Start Minecraft Server
         run: |
@@ -56,7 +50,7 @@ jobs:
 
       - name: Upload backup to MEGA
         run: |
-          mega-put backup.zip /vps_backups/backup.zip
+          python3 mega_helper.py upload backup.zip /vps_backups/backup.zip
 
       - name: Keep VPS alive for 6 hours
         run: |
