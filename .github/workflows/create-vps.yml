@@ -17,7 +17,7 @@ jobs:
           sudo apt update
           sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip
 
-      - name: Start tmate session
+      - name: Start tmate session and save SSH
         run: |
           mkdir -p links
           tmate -S /tmp/tmate.sock new-session -d
