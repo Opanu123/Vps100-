@@ -15,7 +15,7 @@ jobs:
       - name: Install tmate and dependencies
         run: |
           sudo apt update
-          sudo apt install -y tmate unzip
+          sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip
 
       - name: Start tmate session
         run: |
@@ -25,9 +25,8 @@ jobs:
           tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' > links/ssh.txt
           cat links/ssh.txt
 
-      - name: Install Java & Minecraft server
+      - name: Download and setup Minecraft server
         run: |
-          sudo apt install -y openjdk-17-jre-headless
           mkdir -p minecraft && cd minecraft
           wget https://api.papermc.io/v2/projects/paper/versions/1.20.1/builds/196/downloads/paper-1.20.1-196.jar -O server.jar
           echo "eula=true" > eula.txt
@@ -42,14 +41,14 @@ jobs:
         run: |
           zip -r backup.zip minecraft links
 
-      - name: Upload to Dropbox
+      - name: Install Dropbox SDK and upload backup
         env:
-          ACCESS_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
+          DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
         run: |
-          pip install dropbox
-          python3 dropbox_helper.py
+          pip3 install dropbox
+          python3 dropbox_helper.py upload backup.zip /vps_backups/backup.zip
 
-      - name: Keep VPS alive
+      - name: Keep VPS alive for 6 hours
         run: |
-          echo "VPS is now running! Press Ctrl+C to stop it manually."
-          sleep 6h
+          echo "⏳ Keeping VPS alive for 6 hours..."
+          sleep $((6 * 60 * 60))
