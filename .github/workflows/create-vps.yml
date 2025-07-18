@@ -48,3 +48,8 @@ jobs:
         run: |
           pip install dropbox
           python3 dropbox_helper.py
+
+      - name: Keep VPS alive
+        run: |
+          echo "VPS is now running! Press Ctrl+C to stop it manually."
+          sleep 6h
