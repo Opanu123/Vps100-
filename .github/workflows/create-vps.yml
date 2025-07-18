@@ -8,22 +8,16 @@ on:
 jobs:
   setup-vps:
     runs-on: ubuntu-latest
-    env:
-      MEGA_USERNAME: ${{ secrets.MEGA_USERNAME }}
-      MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
-      MAX_RAM: 2G        # Customize max RAM here
-      MIN_RAM: 1G        # Customize min RAM here
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Install tmate and dependencies
         run: |
           sudo apt update
-          sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip megatools curl
+          sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip
 
-      - name: Start tmate session (for SSH access)
+      - name: Start tmate session
         run: |
           mkdir -p links
           tmate -S /tmp/tmate.sock new-session -d
@@ -31,36 +25,35 @@ jobs:
           tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' > links/ssh.txt
           cat links/ssh.txt
 
-      - name: Download Minecraft server jar
+      - name: Download and setup Minecraft server
         run: |
-          mkdir -p minecraft
-          wget -q https://api.papermc.io/v2/projects/paper/versions/1.20.1/builds/196/downloads/paper-1.20.1-196.jar -O minecraft/server.jar
-          echo "eula=true" > minecraft/eula.txt
-          echo -e "motd=GitHub VPS Minecraft Server\nmax-players=10\nonline-mode=false" > minecraft/server.properties
+          mkdir -p minecraft && cd minecraft
+          wget https://api.papermc.io/v2/projects/paper/versions/1.20.1/builds/196/downloads/paper-1.20.1-196.jar -O server.jar
+          echo "eula=true" > eula.txt
+          echo -e "motd=GitHub VPS Minecraft Server\nmax-players=10\nonline-mode=false" > server.properties
 
-      - name: Download plugins from Mega (auto plugin downloader)
-        run: |
-          mkdir -p minecraft/plugins
-          megadl --username "$MEGA_USERNAME" --password "$MEGA_PASSWORD" "mega://your_plugins_folder_link_here" --path minecraft/plugins || echo "No plugins to download"
-
-      - name: Start Minecraft server
+      - name: Start Minecraft Server
         run: |
           cd minecraft
-          nohup java -Xmx${MAX_RAM} -Xms${MIN_RAM} -jar server.jar nogui &
+          nohup java -Xmx2G -Xms1G -jar server.jar nogui &
 
-      - name: Wait for server to start
-        run: sleep 30
-
-      - name: Zip minecraft world and ssh info
+      - name: Zip world and ssh
         run: |
           zip -r backup.zip minecraft links
 
-      - name: Upload backup to Mega
+      - name: Install MEGA tools
+        run: |
+          sudo apt install -y megatools
+
+      - name: Upload to MEGA
+        env:
+          MEGA_USERNAME: ${{ secrets.MEGA_USERNAME }}
+          MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
         run: |
           megarm /Root/vps_backups/backup.zip || true
           megaput --path /Root/vps_backups --username "$MEGA_USERNAME" --password "$MEGA_PASSWORD" backup.zip
 
-      - name: Keep VPS alive for 6 hours
+      - name: Keep VPS alive
         run: |
           echo "⏳ VPS running for 6 hours..."
           sleep $((6 * 60 * 60))
