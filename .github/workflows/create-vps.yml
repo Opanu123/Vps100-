@@ -1,23 +1,23 @@
-name: auto-vps
+name: create-vps
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
   workflow_dispatch:
 
 jobs:
-  setup-vps:
+  vps:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install tmate and dependencies
+      - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip
+          sudo apt install -y tmate unzip openjdk-17-jre-headless wget
+          curl -fsSL https://mega.nz/linux/MEGAcmdDebianSetup.sh | sudo bash
+          sudo apt update && sudo apt install -y megacmd
 
-      - name: Start tmate session
+      - name: Start tmate SSH
         run: |
           mkdir -p links
           tmate -S /tmp/tmate.sock new-session -d
@@ -25,35 +25,58 @@ jobs:
           tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' > links/ssh.txt
           cat links/ssh.txt
 
-      - name: Download and setup Minecraft server
+      - name: Login to MEGA
+        env:
+          MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
+          MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          mkdir -p minecraft && cd minecraft
+          mega-login "$MEGA_EMAIL" "$MEGA_PASSWORD"
+
+      - name: Download world & plugins backups from MEGA
+        run: |
+          mkdir -p minecraft/plugins
+          mega-get /vps_backups/world.zip .
+          mega-get /vps_backups/plugins.zip .
+
+          if [ -f world.zip ]; then
+            unzip world.zip -d minecraft/
+          fi
+          if [ -f plugins.zip ]; then
+            unzip plugins.zip -d minecraft/plugins/
+          fi
+
+      - name: Download latest plugins from /plugins_source/
+        run: |
+          mkdir -p plugin_temp
+          mega-ls /plugins_source/ | while read plugin; do
+            mega-get "/plugins_source/$plugin" "plugin_temp/$plugin"
+          done
+          cp plugin_temp/* minecraft/plugins/ 2>/dev/null || true
+
+      - name: Download Paper Server
+        run: |
+          cd minecraft
           wget https://api.papermc.io/v2/projects/paper/versions/1.20.1/builds/196/downloads/paper-1.20.1-196.jar -O server.jar
           echo "eula=true" > eula.txt
-          echo -e "motd=GitHub VPS Minecraft Server\nmax-players=10\nonline-mode=false" > server.properties
+          echo -e "motd=Mega VPS Minecraft Server\nmax-players=10\nonline-mode=false" > server.properties
 
       - name: Start Minecraft Server
         run: |
           cd minecraft
           nohup java -Xmx2G -Xms1G -jar server.jar nogui &
 
-      - name: Zip world and ssh
+      - name: Backup world & plugins to MEGA
         run: |
-          zip -r backup.zip minecraft links
+          cd minecraft
+          zip -r world.zip world/
+          zip -r plugins.zip plugins/
+          mv world.zip ../
+          mv plugins.zip ../
+          cd ..
+          mega-put world.zip /vps_backups/
+          mega-put plugins.zip /vps_backups/
 
-      - name: Install MEGA tools
+      - name: Keep VPS Alive
         run: |
-          sudo apt install -y megatools
-
-      - name: Upload to MEGA
-        env:
-          MEGA_USERNAME: ${{ secrets.MEGA_USERNAME }}
-          MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
-        run: |
-          megarm /Root/vps_backups/backup.zip || true
-          megaput --path /Root/vps_backups --username "$MEGA_USERNAME" --password "$MEGA_PASSWORD" backup.zip
-
-      - name: Keep VPS alive
-        run: |
-          echo "⏳ VPS running for 6 hours..."
+          echo "✅ VPS running for 6 hours with full auto features!"
           sleep $((6 * 60 * 60))
