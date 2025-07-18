@@ -17,7 +17,7 @@ jobs:
           sudo apt update
           sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip
 
-      - name: Start tmate session and save SSH
+      - name: Start tmate session
         run: |
           mkdir -p links
           tmate -S /tmp/tmate.sock new-session -d
@@ -37,18 +37,23 @@ jobs:
           cd minecraft
           nohup java -Xmx2G -Xms1G -jar server.jar nogui &
 
-      - name: Backup world and SSH info
+      - name: Zip world and ssh
         run: |
           zip -r backup.zip minecraft links
 
-      - name: Install Dropbox SDK and upload backup
-        env:
-          DROPBOX_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
+      - name: Install MEGA tools
         run: |
-          pip3 install dropbox
-          python3 dropbox_helper.py upload backup.zip /vps_backups/backup.zip
+          sudo apt install -y megatools
 
-      - name: Keep VPS alive for 6 hours
+      - name: Upload to MEGA
+        env:
+          MEGA_USERNAME: ${{ secrets.MEGA_USERNAME }}
+          MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          echo "⏳ Keeping VPS alive for 6 hours..."
+          megarm /Root/vps_backups/backup.zip || true
+          megaput --path /Root/vps_backups --username "$MEGA_USERNAME" --password "$MEGA_PASSWORD" backup.zip
+
+      - name: Keep VPS alive
+        run: |
+          echo "⏳ VPS running for 6 hours..."
           sleep $((6 * 60 * 60))
