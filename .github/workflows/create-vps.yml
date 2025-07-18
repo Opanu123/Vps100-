@@ -8,17 +8,15 @@ on:
 jobs:
   setup-vps:
     runs-on: ubuntu-latest
-    env:
-      MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
-      MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Install dependencies and megacmd
         run: |
           sudo apt update
           sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip
-          pip3 install mega.py
+          sudo apt install -y megacmd
 
       - name: Start tmate session
         run: |
@@ -35,10 +33,6 @@ jobs:
           echo "eula=true" > eula.txt
           echo -e "motd=GitHub VPS Minecraft Server\nmax-players=10\nonline-mode=false" > server.properties
 
-      - name: Download plugins from MEGA
-        run: |
-          python3 mega_helper.py download_plugins plugins minecraft/plugins || echo "No plugins found or error"
-
       - name: Start Minecraft Server
         run: |
           cd minecraft
@@ -49,8 +43,13 @@ jobs:
           zip -r backup.zip minecraft links
 
       - name: Upload backup to MEGA
+        env:
+          MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
+          MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          python3 mega_helper.py upload backup.zip /vps_backups/backup.zip
+          mega-login "$MEGA_EMAIL" "$MEGA_PASSWORD"
+          mega-put backup.zip /vps_backups/backup.zip
+          mega-logout
 
       - name: Keep VPS alive for 6 hours
         run: |
