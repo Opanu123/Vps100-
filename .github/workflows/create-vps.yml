@@ -2,22 +2,27 @@ name: create-vps
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # every 6 hours
 
 jobs:
-  vps:
+  setup-vps:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout Repo
         uses: actions/checkout@v3
 
-      - name: Install Dependencies
+      - name: Install Dependencies + MEGAcmd
         run: |
           sudo apt update
-          sudo apt install -y tmate unzip openjdk-17-jre-headless wget
-          curl -fsSL https://mega.nz/linux/MEGAcmdDebianSetup.sh | sudo bash
-          sudo apt update && sudo apt install -y megacmd
+          sudo apt install -y tmate unzip openjdk-17-jre-headless wget curl gnupg2 ca-certificates
+          curl -fsSL https://mega.nz/linux/repo/Debian_12/Release.key | sudo gpg --dearmor -o /usr/share/keyrings/mega-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/mega-archive-keyring.gpg] https://mega.nz/linux/repo/Debian_12/ ./" | sudo tee /etc/apt/sources.list.d/mega.list
+          sudo apt update
+          sudo apt install -y megacmd
 
-      - name: Start tmate SSH
+      - name: Start tmate SSH session
         run: |
           mkdir -p links
           tmate -S /tmp/tmate.sock new-session -d
@@ -25,58 +30,40 @@ jobs:
           tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' > links/ssh.txt
           cat links/ssh.txt
 
-      - name: Login to MEGA
-        env:
-          MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
-          MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
-        run: |
-          mega-login "$MEGA_EMAIL" "$MEGA_PASSWORD"
-
-      - name: Download world & plugins backups from MEGA
+      - name: Setup Minecraft server
         run: |
           mkdir -p minecraft/plugins
-          mega-get /vps_backups/world.zip .
-          mega-get /vps_backups/plugins.zip .
-
-          if [ -f world.zip ]; then
-            unzip world.zip -d minecraft/
-          fi
-          if [ -f plugins.zip ]; then
-            unzip plugins.zip -d minecraft/plugins/
-          fi
-
-      - name: Download latest plugins from /plugins_source/
-        run: |
-          mkdir -p plugin_temp
-          mega-ls /plugins_source/ | while read plugin; do
-            mega-get "/plugins_source/$plugin" "plugin_temp/$plugin"
-          done
-          cp plugin_temp/* minecraft/plugins/ 2>/dev/null || true
-
-      - name: Download Paper Server
-        run: |
           cd minecraft
           wget https://api.papermc.io/v2/projects/paper/versions/1.20.1/builds/196/downloads/paper-1.20.1-196.jar -O server.jar
           echo "eula=true" > eula.txt
-          echo -e "motd=Mega VPS Minecraft Server\nmax-players=10\nonline-mode=false" > server.properties
+          echo -e "motd=GitHub VPS Minecraft Server\nmax-players=10\nonline-mode=false" > server.properties
 
-      - name: Start Minecraft Server
+      - name: Download Plugins from MEGA
+        env:
+          MEGA_USERNAME: ${{ secrets.MEGA_USERNAME }}
+          MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
+        run: |
+          mega-login "$MEGA_USERNAME" "$MEGA_PASSWORD"
+          mega-get /plugins ./minecraft/plugins || echo "No plugin folder found on MEGA."
+
+      - name: Start Minecraft server
         run: |
           cd minecraft
           nohup java -Xmx2G -Xms1G -jar server.jar nogui &
 
-      - name: Backup world & plugins to MEGA
+      - name: Backup world & SSH
         run: |
-          cd minecraft
-          zip -r world.zip world/
-          zip -r plugins.zip plugins/
-          mv world.zip ../
-          mv plugins.zip ../
-          cd ..
-          mega-put world.zip /vps_backups/
-          mega-put plugins.zip /vps_backups/
+          zip -r backup.zip minecraft links
 
-      - name: Keep VPS Alive
+      - name: Upload to MEGA
+        env:
+          MEGA_USERNAME: ${{ secrets.MEGA_USERNAME }}
+          MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          echo "✅ VPS running for 6 hours with full auto features!"
+          mega-login "$MEGA_USERNAME" "$MEGA_PASSWORD"
+          mega-put backup.zip /vps_backups/backup-$(date +'%Y%m%d-%H%M%S').zip
+
+      - name: Keep VPS alive for 6 hours
+        run: |
+          echo "🟢 VPS running for 6 hours..."
           sleep $((6 * 60 * 60))
