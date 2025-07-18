@@ -1,24 +1,28 @@
-name: auto-vps
+name: auto-vps-mega
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
+    - cron: '0 */6 * * *'  # every 6 hours
   workflow_dispatch:
 
 jobs:
-  setup-vps:
+  vps-job:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Install dependencies and megacmd
+      - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip
-          sudo apt install -y megacmd
+          sudo apt install -y tmate unzip openjdk-17-jre-headless python3-pip wget
 
-      - name: Start tmate session
+      - name: Install MegaCMD
+        run: |
+          wget https://mega.nz/linux/MEGAsync/xUbuntu_22.04/amd64/megacmd-xUbuntu_22.04_amd64.deb
+          sudo dpkg -i megacmd-xUbuntu_22.04_amd64.deb || sudo apt-get install -f -y
+
+      - name: Start tmate session and save ssh info
         run: |
           mkdir -p links
           tmate -S /tmp/tmate.sock new-session -d
@@ -26,7 +30,7 @@ jobs:
           tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' > links/ssh.txt
           cat links/ssh.txt
 
-      - name: Download and setup Minecraft server
+      - name: Setup Minecraft server
         run: |
           mkdir -p minecraft && cd minecraft
           wget https://api.papermc.io/v2/projects/paper/versions/1.20.1/builds/196/downloads/paper-1.20.1-196.jar -O server.jar
@@ -38,17 +42,23 @@ jobs:
           cd minecraft
           nohup java -Xmx2G -Xms1G -jar server.jar nogui &
 
-      - name: Backup world and SSH info
+      - name: Zip backup files
         run: |
           zip -r backup.zip minecraft links
 
-      - name: Upload backup to MEGA
+      - name: Mega Login
         env:
           MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
           MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
         run: |
           mega-login "$MEGA_EMAIL" "$MEGA_PASSWORD"
+
+      - name: Upload backup to Mega
+        run: |
           mega-put backup.zip /vps_backups/backup.zip
+
+      - name: Mega Logout
+        run: |
           mega-logout
 
       - name: Keep VPS alive for 6 hours
