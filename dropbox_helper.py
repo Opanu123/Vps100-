@@ -1,12 +1,12 @@
-import dropbox
 import os
+import dropbox
 
+# Get your Dropbox token from GitHub Secrets
 ACCESS_TOKEN = os.environ['ACCESS_TOKEN']
-BACKUP_FILE = "backup.zip"
-
 dbx = dropbox.Dropbox(ACCESS_TOKEN)
 
-with open(BACKUP_FILE, "rb") as f:
-    dbx.files_upload(f.read(), f"/vps_backups/{BACKUP_FILE}", mode=dropbox.files.WriteMode.overwrite)
+# Upload the backup.zip to Dropbox folder /minecraft-backup/
+with open("backup.zip", "rb") as f:
+    dbx.files_upload(f.read(), "/minecraft-backup/backup.zip", mode=dropbox.files.WriteMode("overwrite"))
 
-print("✅ Backup uploaded to Dropbox.")
+print("✅ Uploaded backup.zip to Dropbox")
