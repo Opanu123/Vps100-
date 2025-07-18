@@ -1,0 +1,50 @@
+name: auto-vps
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  setup-vps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install tmate and dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y tmate unzip
+
+      - name: Start tmate session
+        run: |
+          mkdir -p links
+          tmate -S /tmp/tmate.sock new-session -d
+          tmate -S /tmp/tmate.sock wait tmate-ready
+          tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' > links/ssh.txt
+          cat links/ssh.txt
+
+      - name: Install Java & Minecraft server
+        run: |
+          sudo apt install -y openjdk-17-jre-headless
+          mkdir -p minecraft && cd minecraft
+          wget https://api.papermc.io/v2/projects/paper/versions/1.20.1/builds/196/downloads/paper-1.20.1-196.jar -O server.jar
+          echo "eula=true" > eula.txt
+          echo -e "motd=GitHub VPS Minecraft Server\nmax-players=10\nonline-mode=false" > server.properties
+
+      - name: Start Minecraft Server
+        run: |
+          cd minecraft
+          nohup java -Xmx2G -Xms1G -jar server.jar nogui &
+
+      - name: Backup world and SSH info
+        run: |
+          zip -r backup.zip minecraft links
+
+      - name: Upload to Dropbox
+        env:
+          ACCESS_TOKEN: ${{ secrets.DROPBOX_TOKEN }}
+        run: |
+          pip install dropbox
+          python3 dropbox_helper.py
